@@ -1,0 +1,448 @@
+library(dplyr)
+library(survival)
+library(lubridate)
+library(coxme)
+library(splines)
+library(dlnm)
+library(ggplot2)
+library(stringr)
+library(MatchIt)
+library(survey)
+library(twang)
+library(survey)
+library(tableone)
+
+setwd("H:\\duo\\黑色素瘤\\trans\\MATCH_RESULT_FINAL")
+
+file_list <- list.files(path = "H:\\duo\\黑色素瘤\\trans\\for_run", pattern = "\\.rds$", full.names = TRUE)
+
+site <- readRDS("H:\\duo\\黑色素瘤\\FINAL\\cancer\\large\\large\\final\\site.rds")
+
+Classification <- readRDS("H:\\duo\\黑色素瘤\\trans\\classification.rds")
+
+
+
+covariate <-readRDS("H:\\duo\\黑色素瘤\\SEER_incidence\\result\\all_final_hahaha.rds")
+covariate <-covariate[,-c(3:35,38:40,43:49)]
+
+
+exposure<-readRDS("H:\\duo\\黑色素瘤\\SEER_incidence\\final_US_monthly_exposure_result_final_111.rds")
+
+county <- read.csv("H:\\duo\\黑色素瘤\\FINAL\\uscounties.csv")
+county <- county[,c(4,7,8)]
+
+
+temp <-readRDS("H:\\duo\\黑色素瘤\\dsst\\EXPOSURE\\exposure_final\\lag\\temp_LAG_final.rds")
+
+
+for (file in file_list) {
+  tryCatch({
+    
+  cat("Processing file:", file, "\n")
+  
+  data <- readRDS(file)
+  
+  
+data <- left_join(data, site, c(Patient.ID ="Patient ID"))
+  
+data <- left_join(data,Classification,c(Patient.ID = "Patient ID"))
+
+data <- data[,c(1:5,8,79:84,148,203,205:210)]
+colnames(data)[colnames(data) == "SEER.Combined.Mets.at.DX.bone..2010.."] <- "Mets_bone"
+colnames(data)[colnames(data) == "SEER.Combined.Mets.at.DX.brain..2010.."] <- "Mets_brain"
+colnames(data)[colnames(data) == "SEER.Combined.Mets.at.DX.liver..2010.."] <- "Mets_liver"
+colnames(data)[colnames(data) == "SEER.Combined.Mets.at.DX.lung..2010.."] <- "Mets_lung"
+colnames(data)[colnames(data) == "Mets.at.DX.Distant.LN..2016.."] <- "Mets_LN"
+colnames(data)[colnames(data) == "Mets.at.DX.Other..2016.."] <- "Mets_other"
+data$State.county <- gsub("[^0-9]", "", data$State.county)
+colnames(data)[colnames(data) == "State.county"] <- "GEOID"
+colnames(data)[colnames(data) == "Survival.months"] <- "Survival_months"
+colnames(data)[colnames(data) == "Patient.ID"] <- "PatientID"
+colnames(data)[colnames(data) == "Race.recode..White..Black..Other."] <- "Race_recode"
+colnames(data)[colnames(data) == "Marital.status.at.diagnosis" ] <- "Marital_status_at_diagnosis"
+colnames(data)[colnames(data) == "Age.recode.with..1.year.olds" ] <- "Age"
+data <- mutate(data, Age = ifelse(Age %in% c("75-79 years", "85+ years", "70-74 years", "80-84 years", "65-69 years"), "65_UP", "65_DOWN"))
+
+
+data <- data %>%
+  mutate(Mets_bone = na_if(Mets_bone, "Unknown"))
+data <- data %>%
+  mutate(Mets_bone = na_if(Mets_bone, "N/A"))
+
+data <- data %>%
+  mutate(Mets_brain = na_if(Mets_brain, "Unknown"))
+data <- data %>%
+  mutate(Mets_brain = na_if(Mets_brain, "N/A"))
+
+data <- data %>%
+  mutate(Mets_liver = na_if(Mets_liver, "Unknown"))
+data <- data %>%
+  mutate(Mets_liver = na_if(Mets_liver, "N/A"))
+
+data <- data %>%
+  mutate(Mets_lung = na_if(Mets_lung, "Unknown"))
+data <- data %>%
+  mutate(Mets_lung = na_if(Mets_lung, "N/A"))
+
+
+data$Mets_bone <- ifelse(data$Mets_bone == "Yes", 1, 0)
+data$Mets_brain <- ifelse(data$Mets_brain == "Yes", 1, 0)
+data$Mets_liver <- ifelse(data$Mets_liver == "Yes", 1, 0)
+data$Mets_lung <- ifelse(data$Mets_lung == "Yes", 1, 0)
+
+data <- data %>%
+  mutate(Mets_LN = ifelse(Mets_LN == "Yes; distant lymph node metastases", "Yes", Mets_LN))
+data <- data %>%
+  mutate(Mets_LN = ifelse(Mets_LN == "None; no lymph node metastases", "No", Mets_LN))
+data <- data %>%
+  mutate(Mets_LN = na_if(Mets_LN, "Blank(s)"))
+data <- data %>%
+  mutate(Mets_LN = na_if(Mets_LN, "Unknown"))
+data <- data %>%
+  mutate(Mets_LN = na_if(Mets_LN, "Not applicable"))
+data$Mets_LN <- ifelse(data$Mets_LN == "Yes", 1, 0)
+
+
+data <- data %>%
+  mutate(Mets_other = ifelse(Mets_other == "Yes; distant mets in known site(s) other than bone, brain, liver, lung, dist LN", "Yes", Mets_other))
+data <- data %>%
+  mutate(Mets_other = ifelse(Mets_other =="generalized metastases such as carinomatosis", "Yes", Mets_other))
+data <- data %>%
+  mutate(Mets_other = ifelse(Mets_other =="None; no other metastases", "No", Mets_other))
+data <- data %>%
+  mutate(Mets_other = na_if(Mets_other, "Blank(s)"))
+data <- data %>%
+  mutate(Mets_other = na_if(Mets_other, "Unknown"))
+data <- data %>%
+  mutate(Mets_other = na_if(Mets_other, "Not applicable"))
+data$Mets_other <- ifelse(data$Mets_other == "Yes", 1, 0)
+
+data$all_trans <- ifelse(data$Mets_other == 1 | 
+                           data$Mets_LN == 1 | 
+                           data$Mets_bone == 1|
+                           data$Mets_brain == 1|
+                           data$Mets_liver == 1|
+                           data$Mets_lung == 1, 
+                         1, 0)
+
+
+data_clean <- data[!is.na(data$Mets_lung) &
+                     !is.na(data$Mets_liver) &
+                     !is.na(data$Mets_bone) &
+                     !is.na(data$Mets_brain) &
+                     !is.na(data$`Site recode ICD-O-3/WHO 2008`)
+                   &!is.na(data$all_trans)
+                   , ]
+
+
+########################################################################################
+########################################################################################
+########################################################################################
+########################################################################################
+########################################################################################
+########################################################################################
+########################################################################################
+########################################################################################
+
+
+
+match <-matchit(Mets_liver ~ 
+                  Age + Race_recode + 
+                  Sex +
+                  # Mets_liver +
+                  Mets_lung +
+                  Mets_bone +
+                  Mets_brain +
+                  # Mets_LN +
+                  # Mets_other+
+                  Marital_status_at_diagnosis +   
+                  `Site recode ICD-O-3/WHO 2008` +
+                  SEER.registry
+                , data = data_clean, 
+                # method = "nearest",
+                method = "exact",
+                # distance = "logit",
+                # replace = FALSE,
+                caliper = 0.05,
+                ratio = 3
+) 
+
+data <- match.data(match)
+
+table(data$all_trans)
+
+
+
+
+result2_exposure<-left_join(data,exposure,c("GEOID",start ="cal_date"))
+
+result2_exposure$year<- substr(result2_exposure$start,1,4)
+result2_exposure<-left_join(result2_exposure,covariate,c("GEOID",year="Year"))
+
+county$county_fips <- as.character(county$county_fips)
+county$county_fips <- gsub("\\s+", "", county$county_fips)
+county$county_fips <- sprintf("%05d", as.numeric(county$county_fips))  
+result2_exposure<-left_join(result2_exposure,county,c(GEOID= "county_fips"))
+
+# result2_exposure<-left_join(result2_exposure,Classification,c(PatientID = "Patient ID"))
+# result2_exposure<-left_join(result2_exposure,temp,c(start ="cal_date" , "GEOID" ))
+
+
+
+result2_exposure$Race_recode <- as.factor(result2_exposure$Race_recode)
+result2_exposure$Age <- as.factor(result2_exposure$Age)
+result2_exposure$Sex <- as.factor(result2_exposure$Sex)
+# result2_exposure$state<- as.factor(result2_exposure$state)
+result2_exposure$Marital_status_at_diagnosis<- as.factor(result2_exposure$Marital_status_at_diagnosis)
+result2_exposure$Classification <- as.factor(result2_exposure$Classification)
+
+# # 
+
+
+result2_exposure$Education.index<-as.numeric(result2_exposure$Education.index)
+result2_exposure$Median.household.income..in.tens..inflation.adj.to.2021 <- as.numeric(result2_exposure$Median.household.income..in.tens..inflation.adj.to.2021)
+result2_exposure$X..Persons..150..of.poverty <- as.numeric(result2_exposure$X..Persons..150..of.poverty)
+result2_exposure$X..Unemployed <- as.numeric(result2_exposure$X..Unemployed)
+
+result2_exposure$physical<- as.numeric(result2_exposure$physical)
+result2_exposure$drink<- as.numeric(result2_exposure$drink)
+
+result2_exposure$nosmoke <- as.numeric(result2_exposure$nosmoke)
+
+result2_exposure$year <- as.factor(result2_exposure$year)
+colnames(result2_exposure)[colnames(result2_exposure) == "SEER.registry"] <- "SEER_registry"
+result2_exposure$SEER_registry <- as.factor(result2_exposure$SEER_registry)
+
+table(result2_exposure$all_trans)
+
+
+# View(head(result %>%
+#             relocate(start_days_since_first,Survival_months,end_days_since_first),10000))
+# 
+# result2 <- result2  %>%
+#   group_by(PatientID) %>%
+#   mutate(Status.y = if_else(Status.y == 1 & row_number() != n(), 0, Status.y)) %>%
+#   ungroup()
+
+
+rm(data)
+
+
+a <- data.frame()
+
+x=1
+names(result2_exposure)
+
+
+# fire_PM25_60_month_1 <- onebasis(result2_exposure$industrial_PM25_72_month,fun='ns',df=3)
+
+
+
+# for (x in seq_along(c(1:10))){
+
+
+# lag_matrix_total <- crossbasis(result2_exposure[,c(24,28:37)],lag=c(0,10), argvar=list(fun="ns",df=3), arglag=list(fun="ns", df=3),
+#                                knots=logknots(10,nk=1))
+# 
+# lag_matrix_industry <- crossbasis(result2_exposure[,c(27,58:67)],lag=c(0,10), argvar=list(fun="ns",df=3), arglag=list(fun="ns", df=3),
+#                                knots=logknots(10,nk=1))
+# 
+# lag_matrix_traffic <- crossbasis(result2_exposure[,c(26,48:57)],lag=c(0,10), argvar=list(fun="ns",df=3), arglag=list(fun="ns", df=3),
+#                                   knots=logknots(10,nk=1))
+names(result2_exposure)
+mod <- clogit(Mets_liver~
+                total_PM25          # as.factor(concentration_groups)
+              # as.factor(concentration_groups)
+              # as.factor(quantile_group_PM25_60_month)
+              + Race_recode + Age 
+              # + Sex 
+              + Marital_status_at_diagnosis
+              # + strata(`Site recode ICD-O-3/WHO 2008`)
+              # 
+              # + as.factor(year)
+              + as.factor(SEER_registry)
+              # + ns(lat):ns(lng)
+              + as.factor(Classification)
+              + X..Unemployed
+              + X..Persons..150..of.poverty
+              + Education.index +
+                Insurance.Recode..2007..+
+                +  Median.household.income..in.tens..inflation.adj.to.2021
+              + ns(temp_72_month) +  ns(relative_humidity_72_month)
+              + physical
+              + drink
+              + nosmoke
+         
+              + strata(subclass)
+              ,
+              data = result2_exposure
+
+              ,method = "breslow"
+
+)
+
+summary(mod)
+
+
+b<-data.frame(Beta=summary(mod)$coefficients[,1],
+              Se=summary(mod)$coefficients[,3],
+              P_value=summary(mod)$coefficients[,5])%>%
+  mutate( HR=exp(Beta),
+          HR_low=exp((Beta-1.96*Se)),
+          HR_up=exp((Beta+1.96*Se)),
+          
+          HR10=exp(10*Beta),
+          HR10_low=exp(10*(Beta-1.96*Se)),
+          HR10_up=exp(10*(Beta+1.96*Se)),
+          model=paste("Mets_brain_total",  x, sep = "-"))
+
+a<-rbind(a,b)
+##################################
+##################################
+##################################
+##################################
+
+mod <- clogit(Mets_liver~
+                traffic_PM25
+              # as.factor(concentration_groups)
+              # as.factor(quantile_group_PM25_60_month)
+              + Race_recode + Age 
+              # + Sex 
+              + Marital_status_at_diagnosis
+              # + strata(`Site recode ICD-O-3/WHO 2008`)
+              # 
+              # + as.factor(year)
+              + as.factor(SEER_registry)
+              # + ns(lat):ns(lng)
+              + as.factor(Classification)
+              + X..Unemployed
+              + X..Persons..150..of.poverty
+              + Education.index +
+                Insurance.Recode..2007..+
+                +  Median.household.income..in.tens..inflation.adj.to.2021
+              + ns(temp_72_month) +  ns(relative_humidity_72_month)
+              + physical
+              + drink
+              + nosmoke
+              
+              + strata(subclass)
+              ,
+              data = result2_exposure
+              
+              
+              ,method = "breslow"
+              # ,method = "exact"
+              
+              
+              # ,family = binomial(link = "logit")
+)
+
+
+summary(mod)
+b<-data.frame(Beta=summary(mod)$coefficients[,1],
+              Se=summary(mod)$coefficients[,3],
+              P_value=summary(mod)$coefficients[,5])%>%
+  mutate( HR=exp(Beta),
+          HR_low=exp((Beta-1.96*Se)),
+          HR_up=exp((Beta+1.96*Se)),
+          
+          HR10=exp(10*Beta),
+          HR10_low=exp(10*(Beta-1.96*Se)),
+          HR10_up=exp(10*(Beta+1.96*Se)),
+          model=paste("Mets_brain_traffic",  x, sep = "-"))
+
+a<-rbind(a,b)
+
+
+##################################
+##################################
+##################################
+##################################
+
+
+mod <- clogit(Mets_liver~
+                industrial_PM25
+              # as.factor(concentration_groups)
+              # as.factor(quantile_group_PM25_60_month)
+              + Race_recode + Age 
+              # + Sex 
+              + Marital_status_at_diagnosis
+              # + strata(`Site recode ICD-O-3/WHO 2008`)
+              # 
+              # + as.factor(year)
+              + as.factor(SEER_registry)
+              # + ns(lat):ns(lng)
+              + as.factor(Classification)
+              + X..Unemployed
+              + X..Persons..150..of.poverty
+              + Education.index +
+                Insurance.Recode..2007..+
+                +  Median.household.income..in.tens..inflation.adj.to.2021
+              + ns(temp_60_month) +  ns(relative_humidity_60_month)
+              + physical
+              + drink
+              + nosmoke
+              
+              + strata(subclass)
+              ,
+              data = result2_exposure
+              
+              
+              ,method = "breslow"
+              # ,method = "exact"
+              
+              
+              # ,family = binomial(link = "logit")
+)
+
+
+summary(mod)
+
+
+
+b<-data.frame(Beta=summary(mod)$coefficients[,1],
+              Se=summary(mod)$coefficients[,3],
+              P_value=summary(mod)$coefficients[,5])%>%
+  mutate( HR=exp(Beta),
+          HR_low=exp((Beta-1.96*Se)),
+          HR_up=exp((Beta+1.96*Se)),
+          
+          HR10=exp(10*Beta),
+          HR10_low=exp(10*(Beta-1.96*Se)),
+          HR10_up=exp(10*(Beta+1.96*Se)),
+          model=paste("Mets_brain_industrial",  x, sep = "-"))
+a<-rbind(a,b)
+
+
+##################################
+##################################
+##################################
+##################################
+
+
+
+cat("Running Mets_brain for iteration:", x, "\n")
+
+gc()
+
+
+
+
+  }
+
+
+, error = function(e) {
+    # 输出错误信息
+    print(paste("Error occurred:", e$message))
+  }, finally = {
+    # 保存结果为 CSV 格式的文件
+    result_file <- paste0("Mets_brain_", basename(file), ".csv")
+    write.csv(a, file = result_file, row.names = TRUE)
+    gc()
+  })
+  
+  
+}
+
+
+#write.csv(a,"H:\\duo\\黑色素瘤\\trans\\MATCH_result1-4\\lag_0-10_trans.csv")
