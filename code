@@ -12,27 +12,11 @@ library(twang)
 library(survey)
 library(tableone)
 
-setwd("H:\\duo\\黑色素瘤\\trans\\MATCH_RESULT_FINAL")
 
-file_list <- list.files(path = "H:\\duo\\黑色素瘤\\trans\\for_run", pattern = "\\.rds$", full.names = TRUE)
-
-site <- readRDS("H:\\duo\\黑色素瘤\\FINAL\\cancer\\large\\large\\final\\site.rds")
-
-Classification <- readRDS("H:\\duo\\黑色素瘤\\trans\\classification.rds")
-
-
-
-covariate <-readRDS("H:\\duo\\黑色素瘤\\SEER_incidence\\result\\all_final_hahaha.rds")
-covariate <-covariate[,-c(3:35,38:40,43:49)]
-
-
-exposure<-readRDS("H:\\duo\\黑色素瘤\\SEER_incidence\\final_US_monthly_exposure_result_final_111.rds")
-
-county <- read.csv("H:\\duo\\黑色素瘤\\FINAL\\uscounties.csv")
-county <- county[,c(4,7,8)]
-
-
-temp <-readRDS("H:\\duo\\黑色素瘤\\dsst\\EXPOSURE\\exposure_final\\lag\\temp_LAG_final.rds")
+site <- readRDS()
+covariate <-readRDS()
+exposure<-readRDS()
+temp <-readRDS()
 
 
 for (file in file_list) {
@@ -216,52 +200,15 @@ result2_exposure$SEER_registry <- as.factor(result2_exposure$SEER_registry)
 table(result2_exposure$all_trans)
 
 
-# View(head(result %>%
-#             relocate(start_days_since_first,Survival_months,end_days_since_first),10000))
-# 
-# result2 <- result2  %>%
-#   group_by(PatientID) %>%
-#   mutate(Status.y = if_else(Status.y == 1 & row_number() != n(), 0, Status.y)) %>%
-#   ungroup()
-
-
-rm(data)
-
-
 a <- data.frame()
 
-x=1
-names(result2_exposure)
 
-
-# fire_PM25_60_month_1 <- onebasis(result2_exposure$industrial_PM25_72_month,fun='ns',df=3)
-
-
-
-# for (x in seq_along(c(1:10))){
-
-
-# lag_matrix_total <- crossbasis(result2_exposure[,c(24,28:37)],lag=c(0,10), argvar=list(fun="ns",df=3), arglag=list(fun="ns", df=3),
-#                                knots=logknots(10,nk=1))
-# 
-# lag_matrix_industry <- crossbasis(result2_exposure[,c(27,58:67)],lag=c(0,10), argvar=list(fun="ns",df=3), arglag=list(fun="ns", df=3),
-#                                knots=logknots(10,nk=1))
-# 
-# lag_matrix_traffic <- crossbasis(result2_exposure[,c(26,48:57)],lag=c(0,10), argvar=list(fun="ns",df=3), arglag=list(fun="ns", df=3),
-#                                   knots=logknots(10,nk=1))
 names(result2_exposure)
 mod <- clogit(Mets_liver~
-                total_PM25          # as.factor(concentration_groups)
-              # as.factor(concentration_groups)
-              # as.factor(quantile_group_PM25_60_month)
-              + Race_recode + Age 
-              # + Sex 
+                total_PM25         
+              + Race_recode + Age +Sex+
               + Marital_status_at_diagnosis
-              # + strata(`Site recode ICD-O-3/WHO 2008`)
-              # 
-              # + as.factor(year)
               + as.factor(SEER_registry)
-              # + ns(lat):ns(lng)
               + as.factor(Classification)
               + X..Unemployed
               + X..Persons..150..of.poverty
@@ -297,122 +244,6 @@ b<-data.frame(Beta=summary(mod)$coefficients[,1],
           model=paste("Mets_brain_total",  x, sep = "-"))
 
 a<-rbind(a,b)
-##################################
-##################################
-##################################
-##################################
-
-mod <- clogit(Mets_liver~
-                traffic_PM25
-              # as.factor(concentration_groups)
-              # as.factor(quantile_group_PM25_60_month)
-              + Race_recode + Age 
-              # + Sex 
-              + Marital_status_at_diagnosis
-              # + strata(`Site recode ICD-O-3/WHO 2008`)
-              # 
-              # + as.factor(year)
-              + as.factor(SEER_registry)
-              # + ns(lat):ns(lng)
-              + as.factor(Classification)
-              + X..Unemployed
-              + X..Persons..150..of.poverty
-              + Education.index +
-                Insurance.Recode..2007..+
-                +  Median.household.income..in.tens..inflation.adj.to.2021
-              + ns(temp_72_month) +  ns(relative_humidity_72_month)
-              + physical
-              + drink
-              + nosmoke
-              
-              + strata(subclass)
-              ,
-              data = result2_exposure
-              
-              
-              ,method = "breslow"
-              # ,method = "exact"
-              
-              
-              # ,family = binomial(link = "logit")
-)
-
-
-summary(mod)
-b<-data.frame(Beta=summary(mod)$coefficients[,1],
-              Se=summary(mod)$coefficients[,3],
-              P_value=summary(mod)$coefficients[,5])%>%
-  mutate( HR=exp(Beta),
-          HR_low=exp((Beta-1.96*Se)),
-          HR_up=exp((Beta+1.96*Se)),
-          
-          HR10=exp(10*Beta),
-          HR10_low=exp(10*(Beta-1.96*Se)),
-          HR10_up=exp(10*(Beta+1.96*Se)),
-          model=paste("Mets_brain_traffic",  x, sep = "-"))
-
-a<-rbind(a,b)
-
-
-##################################
-##################################
-##################################
-##################################
-
-
-mod <- clogit(Mets_liver~
-                industrial_PM25
-              # as.factor(concentration_groups)
-              # as.factor(quantile_group_PM25_60_month)
-              + Race_recode + Age 
-              # + Sex 
-              + Marital_status_at_diagnosis
-              # + strata(`Site recode ICD-O-3/WHO 2008`)
-              # 
-              # + as.factor(year)
-              + as.factor(SEER_registry)
-              # + ns(lat):ns(lng)
-              + as.factor(Classification)
-              + X..Unemployed
-              + X..Persons..150..of.poverty
-              + Education.index +
-                Insurance.Recode..2007..+
-                +  Median.household.income..in.tens..inflation.adj.to.2021
-              + ns(temp_60_month) +  ns(relative_humidity_60_month)
-              + physical
-              + drink
-              + nosmoke
-              
-              + strata(subclass)
-              ,
-              data = result2_exposure
-              
-              
-              ,method = "breslow"
-              # ,method = "exact"
-              
-              
-              # ,family = binomial(link = "logit")
-)
-
-
-summary(mod)
-
-
-
-b<-data.frame(Beta=summary(mod)$coefficients[,1],
-              Se=summary(mod)$coefficients[,3],
-              P_value=summary(mod)$coefficients[,5])%>%
-  mutate( HR=exp(Beta),
-          HR_low=exp((Beta-1.96*Se)),
-          HR_up=exp((Beta+1.96*Se)),
-          
-          HR10=exp(10*Beta),
-          HR10_low=exp(10*(Beta-1.96*Se)),
-          HR10_up=exp(10*(Beta+1.96*Se)),
-          model=paste("Mets_brain_industrial",  x, sep = "-"))
-a<-rbind(a,b)
-
 
 ##################################
 ##################################
@@ -432,10 +263,8 @@ gc()
 
 
 , error = function(e) {
-    # 输出错误信息
     print(paste("Error occurred:", e$message))
   }, finally = {
-    # 保存结果为 CSV 格式的文件
     result_file <- paste0("Mets_brain_", basename(file), ".csv")
     write.csv(a, file = result_file, row.names = TRUE)
     gc()
@@ -445,4 +274,4 @@ gc()
 }
 
 
-#write.csv(a,"H:\\duo\\黑色素瘤\\trans\\MATCH_result1-4\\lag_0-10_trans.csv")
+#write.csv(a,)
