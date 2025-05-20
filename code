@@ -26,27 +26,7 @@ for (file in file_list) {
   
   data <- readRDS(file)
   
-  
-data <- left_join(data, site, c(Patient.ID ="Patient ID"))
-  
-data <- left_join(data,Classification,c(Patient.ID = "Patient ID"))
-
 data <- data[,c(1:5,8,79:84,148,203,205:210)]
-colnames(data)[colnames(data) == "SEER.Combined.Mets.at.DX.bone..2010.."] <- "Mets_bone"
-colnames(data)[colnames(data) == "SEER.Combined.Mets.at.DX.brain..2010.."] <- "Mets_brain"
-colnames(data)[colnames(data) == "SEER.Combined.Mets.at.DX.liver..2010.."] <- "Mets_liver"
-colnames(data)[colnames(data) == "SEER.Combined.Mets.at.DX.lung..2010.."] <- "Mets_lung"
-colnames(data)[colnames(data) == "Mets.at.DX.Distant.LN..2016.."] <- "Mets_LN"
-colnames(data)[colnames(data) == "Mets.at.DX.Other..2016.."] <- "Mets_other"
-data$State.county <- gsub("[^0-9]", "", data$State.county)
-colnames(data)[colnames(data) == "State.county"] <- "GEOID"
-colnames(data)[colnames(data) == "Survival.months"] <- "Survival_months"
-colnames(data)[colnames(data) == "Patient.ID"] <- "PatientID"
-colnames(data)[colnames(data) == "Race.recode..White..Black..Other."] <- "Race_recode"
-colnames(data)[colnames(data) == "Marital.status.at.diagnosis" ] <- "Marital_status_at_diagnosis"
-colnames(data)[colnames(data) == "Age.recode.with..1.year.olds" ] <- "Age"
-data <- mutate(data, Age = ifelse(Age %in% c("75-79 years", "85+ years", "70-74 years", "80-84 years", "65-69 years"), "65_UP", "65_DOWN"))
-
 
 data <- data %>%
   mutate(Mets_bone = na_if(Mets_bone, "Unknown"))
@@ -137,25 +117,18 @@ match <-matchit(Mets_liver ~
                   Mets_lung +
                   Mets_bone +
                   Mets_brain +
-                  # Mets_LN +
-                  # Mets_other+
+
                   Marital_status_at_diagnosis +   
                   `Site recode ICD-O-3/WHO 2008` +
                   SEER.registry
                 , data = data_clean, 
-                # method = "nearest",
                 method = "exact",
-                # distance = "logit",
-                # replace = FALSE,
-                caliper = 0.05,
-                ratio = 3
+                caliper = 0.05
 ) 
 
 data <- match.data(match)
 
 table(data$all_trans)
-
-
 
 
 result2_exposure<-left_join(data,exposure,c("GEOID",start ="cal_date"))
@@ -168,15 +141,10 @@ county$county_fips <- gsub("\\s+", "", county$county_fips)
 county$county_fips <- sprintf("%05d", as.numeric(county$county_fips))  
 result2_exposure<-left_join(result2_exposure,county,c(GEOID= "county_fips"))
 
-# result2_exposure<-left_join(result2_exposure,Classification,c(PatientID = "Patient ID"))
-# result2_exposure<-left_join(result2_exposure,temp,c(start ="cal_date" , "GEOID" ))
-
-
 
 result2_exposure$Race_recode <- as.factor(result2_exposure$Race_recode)
 result2_exposure$Age <- as.factor(result2_exposure$Age)
 result2_exposure$Sex <- as.factor(result2_exposure$Sex)
-# result2_exposure$state<- as.factor(result2_exposure$state)
 result2_exposure$Marital_status_at_diagnosis<- as.factor(result2_exposure$Marital_status_at_diagnosis)
 result2_exposure$Classification <- as.factor(result2_exposure$Classification)
 
@@ -192,16 +160,12 @@ result2_exposure$physical<- as.numeric(result2_exposure$physical)
 result2_exposure$drink<- as.numeric(result2_exposure$drink)
 
 result2_exposure$nosmoke <- as.numeric(result2_exposure$nosmoke)
-
 result2_exposure$year <- as.factor(result2_exposure$year)
 colnames(result2_exposure)[colnames(result2_exposure) == "SEER.registry"] <- "SEER_registry"
 result2_exposure$SEER_registry <- as.factor(result2_exposure$SEER_registry)
 
-table(result2_exposure$all_trans)
-
 
 a <- data.frame()
-
 
 names(result2_exposure)
 mod <- clogit(Mets_liver~
