@@ -16,7 +16,6 @@ library(tableone)
 site <- readRDS()
 covariate <-readRDS()
 exposure<-readRDS()
-temp <-readRDS()
 
 
 for (file in file_list) {
